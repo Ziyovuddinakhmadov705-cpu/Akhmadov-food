@@ -265,15 +265,32 @@ function submitOrder() {
     total: total(),
     user: tg?.initDataUnsafe?.user || null
   };
+try {
+  const response = await fetch("/api/order", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(data)
+  });
+
+  const result = await response.json();
+
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || "Buyurtma yuborilmadi");
+  }
+
+  alert(`✅ Buyurtmangiz qabul qilindi!\n\nBuyurtma raqami: ${result.order_id}`);
 
   if (tg) {
-    tg.sendData(JSON.stringify(data));
     tg.close();
-  } else {
-    console.log("Demo order:", data);
-    alert("Buyurtma ma'lumotlari tayyor. Telegram ichida ochilganda botga yuboriladi.");
   }
+
+} catch (error) {
+  console.error("Order error:", error);
+  alert("❌ Buyurtmani yuborishda xatolik yuz berdi. Iltimos, qayta urinib ko‘ring.");
 }
+
 
 document.getElementById("cartButton").addEventListener("click", renderCart);
 renderHome();
