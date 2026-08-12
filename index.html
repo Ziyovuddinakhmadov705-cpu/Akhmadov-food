@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Akhmadov Food</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: var(--tg-theme-bg-color, #ffffff);
+      --text: var(--tg-theme-text-color, #111111);
+      --hint: var(--tg-theme-hint-color, #777777);
+      --card: var(--tg-theme-secondary-bg-color, #f3f3f3);
+      --button: var(--tg-theme-button-color, #111111);
+      --button-text: var(--tg-theme-button-text-color, #ffffff);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .app { max-width: 620px; margin: auto; padding: 16px 16px 95px; }
+    .brand { text-align: center; padding: 12px 0 20px; }
+    .brand h1 { margin: 0; font-size: 28px; }
+    .brand p { margin: 5px 0 0; color: var(--hint); }
+    .search {
+      width: 100%; padding: 13px 15px; border: 0; border-radius: 14px;
+      background: var(--card); color: var(--text); font-size: 16px; outline: none;
+    }
+    .section-title { margin: 22px 0 10px; font-size: 20px; }
+    .products { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .product {
+      background: var(--card); border-radius: 18px; padding: 12px;
+      overflow: hidden;
+    }
+    .photo {
+      height: 120px; border-radius: 14px; background: #ddd;
+      display: flex; align-items: center; justify-content: center; font-size: 52px;
+    }
+    .name { font-weight: 700; margin-top: 10px; }
+    .price { margin: 5px 0 10px; color: var(--hint); }
+    button {
+      border: 0; border-radius: 12px; padding: 11px 13px; cursor: pointer;
+      font-size: 15px; font-weight: 700;
+    }
+    .add { width: 100%; background: var(--button); color: var(--button-text); }
+    .bottom {
+      position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px;
+      background: var(--bg); border-top: 1px solid rgba(128,128,128,.18);
+      z-index: 10;
+    }
+    .cart-btn {
+      width: 100%; max-width: 620px; display: block; margin: auto;
+      background: var(--button); color: var(--button-text); font-size: 16px;
+    }
+    .empty { text-align: center; color: var(--hint); padding: 30px 10px; }
+    .row {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 10px; padding: 12px 0; border-bottom: 1px solid rgba(128,128,128,.18);
+    }
+    .qty { display: flex; gap: 8px; align-items: center; }
+    .small { background: var(--card); color: var(--text); min-width: 36px; }
+    .primary {
+      width: 100%; margin-top: 16px; background: var(--button); color: var(--button-text);
+    }
+    .back { background: var(--card); color: var(--text); margin-bottom: 12px; }
+    .form {
+      width: 100%; padding: 13px; border: 0; border-radius: 12px;
+      background: var(--card); color: var(--text); margin: 7px 0; font-size: 16px;
+    }
+    .notice {
+      background: var(--card); border-radius: 16px; padding: 14px; margin-top: 12px;
+    }
+    .error {
+      background: #ffe8e8;
+      color: #a00000;
+      border-radius: 14px;
+      padding: 12px;
+      margin-top: 12px;
+    }
+    @media (max-width: 380px) {
+      .products { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="app"></div>
+
+  <div class="bottom">
+    <button id="cartButton" class="cart-btn">🛒 Savatcha: 0 so‘m</button>
+  </div>
+
+<script>
+"use strict";
+
+const tg = window.Telegram && window.Telegram.WebApp
+  ? window.Telegram.WebApp
+  : null;
+
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.setHeaderColor?.("secondary_bg_color");
+}
+
+const products = [
+  { id: 1, name: "Go‘shtli somsa", price: 8000, emoji: "🥟" },
+  { id: 2, name: "Kartoshkali somsa", price: 6000, emoji: "🥔" },
+  { id: 3, name: "Burger", price: 28000, emoji: "🍔" },
+  { id: 4, name: "Lavash", price: 25000, emoji: "🌯" },
+  { id: 5, name: "Hot-dog", price: 18000, emoji: "🌭" },
+  { id: 6, name: "Fri", price: 15000, emoji: "🍟" },
+  { id: 7, name: "Cola", price: 10000, emoji: "🥤" }
+];
+
+const cart = {};
+let orderType = "delivery";
+
+function money(n) {
+  return new Intl.NumberFormat("uz-UZ").format(n) + " so‘m";
+}
+
+function total() {
+  return Object.entries(cart).reduce((sum, [id, qty]) => {
+    const p = products.find(x => x.id === Number(id));
+    return sum + (p ? p.price * qty : 0);
+  }, 0);
+}
+
+function cartCount() {
+  return Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+}
+
+function updateCartButton() {
+  const button = document.getElementById("cartButton");
+  if (button) {
+    button.textContent = `🛒 Savatcha: ${money(total())}`;
+  }
+}
+
+function add(id) {
+  cart[id] = (cart[id] || 0) + 1;
+  updateCartButton();
+  if (tg) tg.HapticFeedback?.impactOccurred("light");
+}
+
+function remove(id) {
+  if (!cart[id]) return;
+  cart[id]--;
+  if (cart[id] <= 0) delete cart[id];
+  renderCart();
+  updateCartButton();
+}
+
+function renderHome() {
+  document.getElementById("app").innerHTML = `
+    <div class="brand">
+      <h1>🍔 Akhmadov Food</h1>
+      <p>Issiq taomlar — uyingizgacha 🚚</p>
+    </div>
+
+    <input id="search" class="search" placeholder="🔎 Mahsulot qidirish">
+
+    <h2 class="section-title">Menyu</h2>
+    <div id="products" class="products"></div>
+  `;
+
+  renderProducts("");
+
+  document.getElementById("search").addEventListener("input", function(e) {
+    renderProducts(e.target.value);
+  });
+
+  updateCartButton();
+}
+
+function renderProducts(query) {
+  const container = document.getElementById("products");
+  if (!container) return;
+
+  const q = String(query || "").toLowerCase().trim();
+
+  const list = products.filter(p =>
+    p.name.toLowerCase().includes(q)
+  );
+
+  if (!list.length) {
+    container.innerHTML = `<div class="empty">Mahsulot topilmadi.</div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(p => `
+    <div class="product">
+      <div class="photo">${p.emoji}</div>
+      <div class="name">${p.name}</div>
+      <div class="price">${money(p.price)}</div>
+      <button class="add" onclick="add(${p.id})">➕ Qo‘shish</button>
+    </div>
+  `).join("");
+}
+
+function renderCart() {
+  const entries = Object.entries(cart);
+
+  document.getElementById("app").innerHTML = `
+    <button class="back" onclick="renderHome()">← Menyuga qaytish</button>
+    <h2>🛒 Savatcha</h2>
+
+    ${
+      entries.length
+      ? entries.map(([id, qty]) => {
+          const p = products.find(x => x.id === Number(id));
+
+          return `
+            <div class="row">
+              <div>
+                ${p.emoji} <b>${p.name}</b><br>
+                <small>${money(p.price)} × ${qty}</small>
+              </div>
+
+              <div class="qty">
+                <button class="small" onclick="remove(${p.id})">−</button>
+                <b>${qty}</b>
+                <button class="small" onclick="add(${p.id});renderCart()">+</button>
+              </div>
+            </div>
+          `;
+        }).join("")
+      : `<div class="empty">Savatcha bo‘sh.</div>`
+    }
+
+    ${
+      entries.length
+      ? `
+        <div class="notice">
+          <b>Jami: ${money(total())}</b>
+        </div>
+
+        <button class="primary" onclick="checkout()">
+          🚚 Buyurtma berish
+        </button>
+      `
+      : ""
+    }
+  `;
+
+  updateCartButton();
+}
+
+function checkout() {
+  if (!Object.keys(cart).length) {
+    alert("Savatcha bo‘sh.");
+    return;
+  }
+
+  orderType = "delivery";
+  renderCheckout();
+}
+
+function renderCheckout() {
+  document.getElementById("app").innerHTML = `
+    <button class="back" onclick="renderCart()">← Savatchaga qaytish</button>
+
+    <h2>📦 Buyurtma berish</h2>
+
+    <div class="notice">
+      <b>Yetkazib berish usuli</b>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+        <button
+          class="small"
+          style="padding:12px"
+          onclick="setOrderType('delivery')">
+          🚚 Yetkazib berish
+        </button>
+
+        <button
+          class="small"
+          style="padding:12px"
+          onclick="setOrderType('pickup')">
+          🏪 Olib ketaman
+        </button>
+      </div>
+    </div>
+
+    <input
+      id="customerName"
+      class="form"
+      placeholder="👤 Ismingiz"
+      autocomplete="name"
+    >
+
+    <input
+      id="customerPhone"
+      class="form"
+      type="tel"
+      placeholder="📞 Telefon raqam"
+      autocomplete="tel"
+    >
+
+    <div id="addressBlock"></div>
+
+    <div class="notice">
+      <b>💳 To‘lov usuli</b>
+
+      <select id="paymentMethod" class="form">
+        <option value="cash">💵 Naqd pul</option>
+        <option value="card">💳 Karta orqali</option>
+      </select>
+    </div>
+
+    <div class="notice">
+      <b>Jami: ${money(total())}</b>
+      <br>
+      <small style="color:var(--hint)">
+        Buyurtmani yuborishdan oldin ma'lumotlarni tekshiring.
+      </small>
+    </div>
+
+    <button id="submitButton" class="primary" onclick="submitOrder()">
+      ✅ Buyurtmani tasdiqlash
+    </button>
+  `;
+
+  updateCheckoutMode();
+}
+
+function setOrderType(type) {
+  orderType = type;
+  updateCheckoutMode();
+}
+
+function updateCheckoutMode() {
+  const block = document.getElementById("addressBlock");
+  if (!block) return;
+
+  if (orderType === "delivery") {
+    block.innerHTML = `
+      <input
+        id="customerAddress"
+        class="form"
+        placeholder="📍 Yetkazib berish manzili"
+        autocomplete="street-address"
+      >
+    `;
+  } else {
+    block.innerHTML = `
+      <div class="notice">
+        🏪 <b>Olib ketish</b><br>
+        <small style="color:var(--hint)">
+          Buyurtma tayyor bo‘lganda kelib olib ketasiz.
+        </small>
+      </div>
+    `;
+  }
+}
+
+async function submitOrder() {
+  const name = document.getElementById("customerName")?.value.trim();
+  const phone = document.getElementById("customerPhone")?.value.trim();
+  const address =
+    document.getElementById("customerAddress")?.value.trim() || "";
+  const payment =
+    document.getElementById("paymentMethod")?.value;
+
+  if (!name) {
+    alert("Iltimos, ismingizni kiriting.");
+    return;
+  }
+
+  if (!phone || phone.length < 7) {
+    alert("Iltimos, to‘g‘ri telefon raqam kiriting.");
+    return;
+  }
+
+  if (orderType === "delivery" && !address) {
+    alert("Iltimos, yetkazib berish manzilini kiriting.");
+    return;
+  }
+
+  const items = Object.entries(cart).map(([id, qty]) => ({
+    id: Number(id),
+    qty: Number(qty)
+  }));
+
+  if (!items.length) {
+    alert("Savatcha bo‘sh.");
+    return;
+  }
+
+  const data = {
+    order_type: orderType,
+    customer: {
+      name: name,
+      phone: phone,
+      address: orderType === "delivery" ? address : null
+    },
+    payment_method: payment,
+    items: items,
+    total: total(),
+    user: tg?.initDataUnsafe?.user || null
+  };
+
+  const button = document.getElementById("submitButton");
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "⏳ Yuborilmoqda...";
+  }
+
+  try {
+    const response = await fetch("/api/order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(data)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Buyurtma yuborilmadi");
+    }
+
+    alert(
+      `✅ Buyurtmangiz yuborildi!\n\nBuyurtma raqami: ${result.order_id}`
+    );
+
+    Object.keys(cart).forEach(id => delete cart[id]);
+    updateCartButton();
+
+    if (tg) {
+      tg.close();
+    } else {
+      renderHome();
+    }
+
+  } catch (error) {
+    console.error("Order error:", error);
+
+    alert(
+      "❌ Buyurtmani yuborishda xatolik yuz berdi.\n\n" +
+      "Iltimos, qayta urinib ko‘ring."
+    );
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "✅ Buyurtmani tasdiqlash";
+    }
+  }
+}
+
+document
+  .getElementById("cartButton")
+  .addEventListener("click", renderCart);
+
+renderHome();
+</script>
+</body>
+</html>
