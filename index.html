@@ -242,7 +242,7 @@ function updateCheckoutMode() {
   }
 }
 
-function submitOrder() {
+async function submitOrder() {
   const name = document.getElementById("customerName")?.value.trim();
   const phone = document.getElementById("customerPhone")?.value.trim();
   const address = document.getElementById("customerAddress")?.value.trim() || "";
